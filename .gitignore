@@ -1,0 +1,13 @@
+# Simulation outputs
+*.vcd
+*.hex
+cpu_sim
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS files
+.DS_Store
+.directory
