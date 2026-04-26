@@ -74,12 +74,13 @@ module cpu (
     reg         rf_we;
     wire [63:0] rf_rd1;
     wire [63:0] rf_rd2;
+    wire [4:0]  rs2_sel = (opcode == 6'h0A || opcode == 6'h0B || opcode == 6'h09) ? rd : rs2;
 
     regfile rf (
         .clk(clk),
         .rst(rst),
         .rs1(rs1),
-        .rs2(rs2),
+        .rs2(rs2_sel),
         .rd(rd),
         .wd(rf_wd),
         .we(rf_we),
@@ -242,17 +243,17 @@ module cpu (
                 end
 
                 6'h0A: begin // BEQ
-                    if (rf_rd1 == rf_rd2) pc_calc = pc + branch_offset;
+                    if (rf_rd1 == rf_rd2) pc_calc = pc + 4 + branch_offset;
                 end
                 
                 6'h0B: begin // BNE
-                    if (rf_rd1 != rf_rd2) pc_calc = pc + branch_offset;
+                    if (rf_rd1 != rf_rd2) pc_calc = pc + 4 + branch_offset;
                 end
 
                 6'h0C: begin // JAL
                     rf_we     = 1'b1;
                     rf_wd_mux = pc + 4;
-                    pc_calc   = pc + jump_offset;
+                    pc_calc   = pc + 4 + jump_offset;
                 end
 
                 6'h0D: begin // JALR

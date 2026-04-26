@@ -73,13 +73,13 @@ module csr (
             priv_mode <= 1'b0;      // Drop to User Mode (Wait, maybe restore from status. Keep simple 0 for now)
             status[0] <= 1'b0;
         end else if (csr_we && priv_mode == 1'b1) begin
-            // Software Write (Only allowed in Machine Mode)
             case (csr_addr)
                 CSR_STATUS:  begin status <= csr_wdata; priv_mode <= csr_wdata[0]; end
                 CSR_EPC:     epc <= csr_wdata;
                 CSR_CAUSE:   cause <= csr_wdata;
                 CSR_MMU_PTB: mmu_ptb <= csr_wdata;
                 CSR_TVAL:    tval <= csr_wdata;
+                default: ;
             endcase
         end
     end

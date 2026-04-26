@@ -41,12 +41,17 @@ class NanoCore64Emulator:
         if reg != 0:
             self.regs[reg] = val & 0xFFFFFFFFFFFFFFFF
 
+    def check_page_fault(self, paddr):
+        return self.csrs[3] != 0 and self.priv_mode == 0 and paddr < 0x10000
+
     def read_mem(self, vaddr):
         # Simplified Memory
         paddr = vaddr
-        if self.csrs[3] != 0:
+        if self.csrs[3] != 0 and self.priv_mode == 0:
             vpn = (vaddr >> 12)
             paddr = ((vpn + self.csrs[3]) << 12) | (vaddr & 0xFFF)
+        if self.check_page_fault(paddr):
+            return None # Indicate page fault
         word_addr = (paddr >> 3)
         if 0 <= word_addr < len(self.data_mem):
             return self.data_mem[word_addr]
@@ -54,17 +59,33 @@ class NanoCore64Emulator:
 
     def write_mem(self, vaddr, val):
         paddr = vaddr
-        if self.csrs[3] != 0:
+        if self.csrs[3] != 0 and self.priv_mode == 0:
             vpn = (vaddr >> 12)
             paddr = ((vpn + self.csrs[3]) << 12) | (vaddr & 0xFFF)
+        if self.check_page_fault(paddr):
+            return False # Indicate page fault
         word_addr = (paddr >> 3)
         if 0 <= word_addr < len(self.data_mem):
             self.data_mem[word_addr] = val & 0xFFFFFFFFFFFFFFFF
+        return True
 
     def step(self):
         if self.halted: return False
 
-        word_pc = self.pc >> 2
+        # Instruction fetch
+        inst_paddr = self.pc
+        if self.csrs[3] != 0 and self.priv_mode == 0:
+            vpn = (self.pc >> 12)
+            inst_paddr = ((vpn + self.csrs[3]) << 12) | (self.pc & 0xFFF)
+            
+        if self.check_page_fault(inst_paddr):
+            self.csrs[1] = self.pc
+            self.csrs[2] = 2 # Page Fault
+            self.priv_mode = 1
+            self.pc = 0
+            return True
+
+        word_pc = inst_paddr >> 2
         inst = self.inst_mem[word_pc] if word_pc < len(self.inst_mem) else 0
         
         opcode = inst & 0x3F
@@ -101,16 +122,28 @@ class NanoCore64Emulator:
             b = (imm16_ext & 0x3F) if opcode == 0x27 else (self.regs[rs2] & 0x3F)
             self.write_reg(rd, self.regs[rs1] >> b)
         elif opcode == 0x08: # LD
-            self.write_reg(rd, self.read_mem(self.regs[rs1] + imm16_ext))
+            val = self.read_mem(self.regs[rs1] + imm16_ext)
+            if val is None:
+                self.csrs[1] = self.pc
+                self.csrs[2] = 2 # Page Fault
+                self.priv_mode = 1
+                self.pc = 0
+                return True
+            self.write_reg(rd, val)
         elif opcode == 0x09: # ST
-            self.write_mem(self.regs[rs1] + imm16_ext, self.regs[rd])
+            if not self.write_mem(self.regs[rs1] + imm16_ext, self.regs[rd]):
+                self.csrs[1] = self.pc
+                self.csrs[2] = 2 # Page Fault
+                self.priv_mode = 1
+                self.pc = 0
+                return True
         elif opcode == 0x0A: # BEQ
-            if self.regs[rd] == self.regs[rs1]: next_pc = self.pc + (imm16_ext * 4)
+            if self.regs[rd] == self.regs[rs1]: next_pc = self.pc + 4 + (imm16_ext * 4)
         elif opcode == 0x0B: # BNE
-            if self.regs[rd] != self.regs[rs1]: next_pc = self.pc + (imm16_ext * 4)
+            if self.regs[rd] != self.regs[rs1]: next_pc = self.pc + 4 + (imm16_ext * 4)
         elif opcode == 0x0C: # JAL
             self.write_reg(rd, self.pc + 4)
-            next_pc = self.pc + (imm21_ext * 4)
+            next_pc = self.pc + 4 + (imm21_ext * 4)
         elif opcode == 0x0D: # JALR
             self.write_reg(rd, self.pc + 4)
             next_pc = self.regs[rs1] + imm16_ext
@@ -118,6 +151,8 @@ class NanoCore64Emulator:
             self.write_reg(rd, self.csrs.get(imm16, 0))
         elif opcode == 0x0F: # CSRW
             self.csrs[imm16] = self.regs[rs1]
+            if imm16 == 0:
+                self.priv_mode = self.regs[rs1] & 1
         elif opcode == 0x10: # SYSCALL
             self.csrs[1] = self.pc
             self.csrs[2] = 1 # Syscall cause

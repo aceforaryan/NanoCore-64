@@ -15,7 +15,7 @@ module mmu (
     // If mmu_ptb != 0, simple simulated translation for OS app sandboxes.
     // In a real device, this would contain a 4-entry or 8-entry TLB.
     
-    wire vmem_enabled = (mmu_ptb != 64'd0);
+    wire vmem_enabled = (mmu_ptb != 64'd0) && (priv_mode == 1'b0);
     
     // Page size 4KB -> offset is [11:0]
     wire [11:0] page_offset = virtual_addr[11:0];

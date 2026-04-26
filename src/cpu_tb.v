@@ -50,7 +50,7 @@ module cpu_tb;
 
     initial begin
         // Initialize memory
-        $readmemh("fibonacci.hex", imem);
+        $readmemh("mmu_test.hex", imem);
         
         // Setup GTKWave dump
         $dumpfile("cpu_tb.vcd");
@@ -68,8 +68,10 @@ module cpu_tb;
 
         $display("Simulation finished. CPU entered SLEEP mode.");
         $display("Register Dump:");
-        $display("R1 : %d", dut.rf.registers[1]);
-        $display("R2 : %d", dut.rf.registers[2]);
+        $display("R20: %h", dut.rf.registers[20]);
+        $display("R21: %h", dut.rf.registers[21]);
+        $display("R22: %h", dut.rf.registers[22]);
+        $display("R23: %h", dut.rf.registers[23]);
         $display("Cycles complete.");
         
         $finish;
