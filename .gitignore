@@ -11,6 +11,4 @@ __pycache__/
 # OS files
 .DS_Store
 .directory
-
-# Verilator
 obj_dir/
