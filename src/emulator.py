@@ -14,9 +14,12 @@ class NanoCore64Emulator:
             2: 0, # CAUSE
             3: 0, # MMU_PTB
             4: 0, # TVAL
+            5: 0, # TIME
+            6: 0xFFFFFFFFFFFFFFFF, # TIMECMP
         }
         self.priv_mode = 1 # 1: Machine, 0: User
         
+        self.mtime = 0
         self.pc = 0
         self.halted = False
 
@@ -70,6 +73,18 @@ class NanoCore64Emulator:
         return True
 
     def step(self):
+        self.mtime += 1
+        self.csrs[5] = self.mtime
+
+        if (self.csrs[0] & 2) and (self.mtime >= self.csrs[6]):
+            self.csrs[1] = self.pc
+            self.csrs[2] = 3 # Timer Interrupt
+            self.priv_mode = 1
+            self.csrs[0] = self.csrs[0] & ~2 # Disable interrupts
+            self.pc = 0
+            self.halted = False
+            return True
+
         if self.halted: return False
 
         # Instruction fetch
@@ -184,8 +199,11 @@ if __name__ == "__main__":
     emu.load_hex(sys.argv[1])
     print("--- Starting Execution ---")
     cycles = 0
-    while not emu.halted and cycles < 10000:
+    while cycles < 10000:
         emu.step()
         cycles += 1
-    print(f"--- Halted after {cycles} cycles ---")
+        # If halted and interrupts are disabled natively, we can safely exit early
+        if emu.halted and not (emu.csrs[0] & 2):
+            break
+    print(f"--- Finished after {cycles} cycles ---")
     emu.dump()

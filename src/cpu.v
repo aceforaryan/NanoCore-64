@@ -101,6 +101,20 @@ module cpu (
     wire [63:0] mmu_ptb_out;
     wire        priv_mode;
     reg        eret_req;
+    
+    // Timer wiring
+    wire [63:0] timecmp_out;
+    wire [63:0] mtime_out;
+    wire        timer_interrupt;
+    wire        interrupt_req;
+
+    timer base_timer (
+        .clk(clk),
+        .rst(rst),
+        .timecmp(timecmp_out),
+        .mtime_out(mtime_out),
+        .timer_interrupt(timer_interrupt)
+    );
 
     csr csr_inst (
         .clk(clk),
@@ -114,6 +128,12 @@ module cpu (
         .trap_cause(trap_cause),
         .trap_tval(64'd0),
         .eret_req(eret_req),
+        
+        .timer_interrupt_in(timer_interrupt),
+        .mtime_in(mtime_out),
+        .timecmp_out(timecmp_out),
+        .interrupt_req_out(interrupt_req),
+        
         .priv_mode(priv_mode),
         .epc_out(epc_out),
         .mmu_ptb_out(mmu_ptb_out)
@@ -185,7 +205,11 @@ module cpu (
         csr_wdata   = 64'd0;
         pc_calc     = pc + 4;
 
-        if (inst_page_fault) begin
+        if (interrupt_req) begin
+            trap_req   = 1'b1;
+            trap_cause = 64'd3; // Timer Interrupt
+            pc_calc    = 64'h0000_0000_0000_0000;
+        end else if (inst_page_fault) begin
             trap_req   = 1'b1;
             trap_cause = 64'd2; // Page Fault
             pc_calc    = 64'h0000_0000_0000_0000; // Trap vector

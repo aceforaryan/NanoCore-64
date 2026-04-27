@@ -50,7 +50,7 @@ module cpu_tb;
 
     initial begin
         // Initialize memory
-        $readmemh("mmu_test.hex", imem);
+        $readmemh("timer_test.hex", imem);
         
         // Setup GTKWave dump
         $dumpfile("cpu_tb.vcd");
@@ -65,8 +65,15 @@ module cpu_tb;
         // Run until sleep or timeout
         wait(sleep_mode == 1'b1);
         #20;
+        
+        // Wait another 10 cycles to ensure if it's an end-of-test sleep or mid-test sleep.
+        // Wait, for our timer_test, the CPU sleeps midway waiting for an interrupt!
+        // So wait(sleep_mode == 1'b1) will exit IMMEDIATELY.
+        // We must check if the CPU wakes up again or we can just wait 200 cycles.
+        // Let's just run it for 2000 cycles flat, then finish.
+        #2000;
 
-        $display("Simulation finished. CPU entered SLEEP mode.");
+        $display("Simulation finished. Post 2000 ticks.");
         $display("Register Dump:");
         $display("R20: %h", dut.rf.registers[20]);
         $display("R21: %h", dut.rf.registers[21]);
