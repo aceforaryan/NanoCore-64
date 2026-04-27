@@ -7,8 +7,8 @@ NanoCore-64 is a powerful yet ultra-lightweight custom 64-bit RISC architecture 
 - **Instruction Width:** Fixed 32-bit instructions.
 - **Registers:** 32 General Purpose Registers (GPRs), 64 bits wide. `R0` is hardwired to 0.
 - **Privilege Modes:** User/App Mode (U) for sandboxing, and Machine Mode (M) for Kernel operations.
-- **Memory Management:** Switchable hardware MMU (Translation Lookaside Buffer) for 4KB Paged Virtual Memory.
-- **Interrupts/Exceptions:** Basic trap mechanism for Syscalls, Timers, and Page Faults.
+- **Memory Management:** Switchable hardware MMU for 4KB Paged Virtual Memory.
+- **Interrupts/Exceptions:** Asynchronous and Synchronous trap mechanism.
 
 ## Registers
 | Register | Name   | Usage |
@@ -30,7 +30,7 @@ Used for register-to-register ALU and OS instructions.
 ### I-Type (Immediate, Load, Store, Branch, CSR)
 Used for arithmetic with 16-bit constants, loads, stores, branches, and CSR access.
 `[Imm: 16] [Rs1: 5] [Rd: 5] [Opcode: 6]`
-*(For branches, Imm is a signed offset. For Loads/Stores, it's a signed address offset. For CSR, it's a 16-bit CSR address).*
+*(For branches, Imm is a signed label offset. For Loads/Stores/CSR, it's a signed immediate or 16-bit address).*
 
 ### J-Type (Jump)
 Used for long range jumps.
@@ -41,34 +41,40 @@ Used for long range jumps.
 | Opcode | Mnemonic | Format | Operation |
 |--------|----------|--------|-----------|
 | `000000`| NOP      | R      | No operation |
-| `000001`| ADD      | R/I    | `Rd = Rs1 + (Rs2 or Sext(Imm))` |
+| `000001`| ADD      | R      | `Rd = Rs1 + Rs2` |
+| `100001`| ADDI     | I      | `Rd = Rs1 + Sext(Imm)` |
 | `000010`| SUB      | R      | `Rd = Rs1 - Rs2` |
-| `000011`| AND      | R/I    | `Rd = Rs1 & (Rs2 or Sext(Imm))` |
-| `000100`| OR       | R/I    | `Rd = Rs1 \| (Rs2 or Sext(Imm))` |
-| `000101`| XOR      | R/I    | `Rd = Rs1 ^ (Rs2 or Sext(Imm))` |
-| `000110`| SHL      | R/I    | `Rd = Rs1 << (Rs2 or Imm[5:0])` (Logical Left) |
-| `000111`| SHR      | R/I    | `Rd = Rs1 >> (Rs2 or Imm[5:0])` (Logical Right) |
+| `000011`| AND      | R      | `Rd = Rs1 & Rs2` |
+| `100011`| ANDI     | I      | `Rd = Rs1 & Sext(Imm)` |
+| `000100`| OR       | R      | `Rd = Rs1 | Rs2` |
+| `100100`| ORI      | I      | `Rd = Rs1 | Sext(Imm)` |
 | `001000`| LD       | I      | `Rd = MEM64[Rs1 + Sext(Imm)]` (Load Double Word) |
 | `001001`| ST       | I      | `MEM64[Rs1 + Sext(Imm)] = Rd` (Store Double Word) |
-| `001010`| BEQ      | I      | `if (Rd == Rs1) PC = PC + 4 + Sext(Imm)<<2` |
+| `001010`| BEQ      | I      | `if (Rd == Rs1) PC = PC + 4 + Sext(Imm)<<2` (Offset is relative to PC+4) |
 | `001011`| BNE      | I      | `if (Rd != Rs1) PC = PC + 4 + Sext(Imm)<<2` |
-| `001100`| JAL      | J      | `Rd = PC + 4; PC = PC + Sext(Imm)<<2` |
+| `001100`| JAL      | J      | `Rd = PC + 4; PC = PC + 4 + Sext(Imm)<<2` |
 | `001101`| JALR     | I      | `Rd = PC + 4; PC = Rs1 + Sext(Imm)` |
 | `001110`| CSRR     | I      | `Rd = CSR[Imm]` (CSR Read) |
 | `001111`| CSRW     | I      | `CSR[Imm] = Rs1` (CSR Write) |
-| `010000`| SYSCALL  | R      | Traps to Machine Mode `(Exception 0x01)` |
-| `010001`| RET      | R      | Returns from Exception to previous mode |
-| `111111`| SLEEP    | R      | Halts CPU execution until external interrupt. (Low power) |
-
-> Note: Hardware multiplication and division are excluded. Emulate via software algorithms in M-Mode or compiler libraries to maintain *ultra-lightweight* gate count.
+| `010000`| SYSCALL  | R      | Traps to Machine Mode `(Cause 1)` |
+| `010001`| RET      | R      | Returns to previous mode and `EPC` address |
+| `111111`| SLEEP    | R      | Halts CPU execution until interrupt. |
 
 ## Control and Status Registers (CSRs)
 Operated on via `CSRR/CSRW` instructions. Valid only in M-Mode.
 
 | Address | Name      | Description |
 |---------|-----------|-------------|
-| `0x00`  | `STATUS`  | Contains global status bits (e.g. Interrupt Enable, Privilege Mode flag). |
-| `0x01`  | `EPC`     | Exception Program Counter. Stores PC when an exception occurs. |
+| `0x00`  | `STATUS`  | `[1]` Global Interrupt Enable (GIE), `[0]` Privilege Mode (1=M, 0=U) |
+| `0x01`  | `EPC`     | Exception Program Counter. Stores PC of faulting instruction. |
 | `0x02`  | `CAUSE`   | Exception Cause (1=Syscall, 2=Page Fault, 3=Timer). |
-| `0x03`  | `MMU_PTB` | Page Table Base address. `0` = Physical Addressing modes, non-zero enables Paged Virtual Memory. |
-| `0x04`  | `TVAL`    | Trap Value (e.g. faulted virtual address on a page fault). |
+| `0x03`  | `MMU_PTB` | Page Table Base. If > 0, enables translation in U-Mode. |
+| `0x04`  | `TVAL`    | Trap Value (e.g. faulted virtual address). |
+| `0x05`  | `TIME`    | Current 64-bit cycle counter (Read-only). |
+| `0x06`  | `TIMECMP` | Timer Comparison register for creating interrupts. |
+
+## Memory Management Unit (MMU)
+When `MMU_PTB > 0` and `STATUS[0] == 0` (User Mode):
+- **Address Translation:** `PhysicalAddr = ((VPN + PTB) << 12) | Offset`.
+- **Protection:** Access to physical addresses `< 0x10000` (64KB Kernel Protected Zone) triggers a Page Fault.
+- **Transparency:** The MMU is transparent in Machine Mode (`STATUS[0] == 1`).
