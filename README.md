@@ -7,8 +7,9 @@ NanoCore-64 is a custom, ultra-lightweight 64-bit RISC architecture optimized fo
 - **Fixed 32-bit Instructions**: Simple and predictable decoding.
 - **32 General Purpose Registers**: High efficiency for C compilers and OS kernels.
 - **Dual Privilege Modes**: Support for User (App) and Machine (Kernel) levels.
-- **Lightweight MMU**: Hardware-accelerated virtual memory with 4KB paging.
-- **OS Support**: Built-in trap logic for syscalls, page faults, and hardware interrupts.
+- **Lightweight MMU**: Hardware-accelerated virtual memory with 4KB paging and Base+Bounds sandboxing.
+- **OS Support**: Preemptive multitasking kernel with UART I/O, context switching, and trap handling.
+- **Security**: Hardware-enforced sandbox limits for User-mode applications.
 
 ## Repository Structure
 - `src/`: Verilog RTL source code and simulation tools.

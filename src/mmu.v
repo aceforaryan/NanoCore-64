@@ -21,14 +21,19 @@ module mmu (
     wire [11:0] page_offset = virtual_addr[11:0];
     wire [51:0] vpn         = virtual_addr[63:12];
     
-    // Simplistic simulation of translation: Physical Page Number = VPN + PTB[51:0]
-    // In actual implementation, we would query a small SRAM TLB here.
-    wire [51:0] ppn         = vpn + mmu_ptb[51:0];
+    // mmu_ptb[31:0]:  Physical Base Page Number
+    // mmu_ptb[63:32]: Virtual Page Limit (Max VPN allowed)
+    wire [31:0] base_ppn    = mmu_ptb[31:0];
+    wire [31:0] vpn_limit    = mmu_ptb[63:32];
     
-    assign physical_addr = vmem_enabled ? {ppn, page_offset} : virtual_addr;
+    wire is_uart       = (physical_addr == 64'h0000_0000_1000_0000);
+    wire out_of_bounds = (vpn >= vpn_limit) && !is_uart;
+    wire [51:0] ppn    = vpn + {20'd0, base_ppn};
     
-    // Simple protection: Trigger page fault if trying to access physical address < 64KB in User Mode
-    // (Protecting OS kernel space).
-    assign page_fault = mem_req && vmem_enabled && (priv_mode == 1'b0) && (physical_addr < 64'h0000_0000_0001_0000);
+    assign physical_addr = vmem_enabled ? (is_uart ? virtual_addr : {ppn, page_offset}) : virtual_addr;
+    
+    // Page fault if:
+    // 1. Out of bounds (VPN >= Limit) AND not UART
+    assign page_fault = mem_req && vmem_enabled && out_of_bounds;
 
 endmodule

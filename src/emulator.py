@@ -44,17 +44,32 @@ class NanoCore64Emulator:
         if reg != 0:
             self.regs[reg] = val & 0xFFFFFFFFFFFFFFFF
 
-    def check_page_fault(self, paddr):
-        return self.csrs[3] != 0 and self.priv_mode == 0 and paddr < 0x10000
+    def check_page_fault(self, vpn, paddr):
+        if self.csrs[3] == 0 or self.priv_mode != 0:
+            return False
+            
+        if paddr == 0x10000000:
+            return False # UART is exempt
+        
+        limit = (self.csrs[3] >> 32) & 0xFFFFFFFF
+        if vpn >= limit:
+            return True # Virtual Address Out of Bounds
+            
+        return False
 
     def read_mem(self, vaddr):
-        # Simplified Memory
         paddr = vaddr
+        vpn = (vaddr >> 12)
         if self.csrs[3] != 0 and self.priv_mode == 0:
-            vpn = (vaddr >> 12)
-            paddr = ((vpn + self.csrs[3]) << 12) | (vaddr & 0xFFF)
-        if self.check_page_fault(paddr):
+            if vaddr == 0x10000000:
+                paddr = vaddr
+            else:
+                base_ppn = self.csrs[3] & 0xFFFFFFFF
+                paddr = ((vpn + base_ppn) << 12) | (vaddr & 0xFFF)
+            
+        if self.check_page_fault(vpn, paddr):
             return None # Indicate page fault
+            
         word_addr = (paddr >> 3)
         if 0 <= word_addr < len(self.data_mem):
             return self.data_mem[word_addr]
@@ -62,11 +77,22 @@ class NanoCore64Emulator:
 
     def write_mem(self, vaddr, val):
         paddr = vaddr
+        vpn = (vaddr >> 12)
         if self.csrs[3] != 0 and self.priv_mode == 0:
-            vpn = (vaddr >> 12)
-            paddr = ((vpn + self.csrs[3]) << 12) | (vaddr & 0xFFF)
-        if self.check_page_fault(paddr):
+            if vaddr == 0x10000000:
+                paddr = vaddr
+            else:
+                base_ppn = self.csrs[3] & 0xFFFFFFFF
+                paddr = ((vpn + base_ppn) << 12) | (vaddr & 0xFFF)
+            
+        if self.check_page_fault(vpn, paddr):
             return False # Indicate page fault
+            
+        # Memory-Mapped UART
+        if paddr == 0x10000000:
+            print(chr(val & 0xFF), end='', flush=True)
+            return True
+
         word_addr = (paddr >> 3)
         if 0 <= word_addr < len(self.data_mem):
             self.data_mem[word_addr] = val & 0xFFFFFFFFFFFFFFFF
@@ -89,11 +115,15 @@ class NanoCore64Emulator:
 
         # Instruction fetch
         inst_paddr = self.pc
+        inst_vpn = (self.pc >> 12)
         if self.csrs[3] != 0 and self.priv_mode == 0:
-            vpn = (self.pc >> 12)
-            inst_paddr = ((vpn + self.csrs[3]) << 12) | (self.pc & 0xFFF)
+            if self.pc == 0x10000000:
+                inst_paddr = self.pc
+            else:
+                base_ppn = self.csrs[3] & 0xFFFFFFFF
+                inst_paddr = ((inst_vpn + base_ppn) << 12) | (self.pc & 0xFFF)
             
-        if self.check_page_fault(inst_paddr):
+        if self.check_page_fault(inst_vpn, inst_paddr):
             self.csrs[1] = self.pc
             self.csrs[2] = 2 # Page Fault
             self.priv_mode = 1

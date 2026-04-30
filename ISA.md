@@ -75,6 +75,9 @@ Operated on via `CSRR/CSRW` instructions. Valid only in M-Mode.
 
 ## Memory Management Unit (MMU)
 When `MMU_PTB > 0` and `STATUS[0] == 0` (User Mode):
-- **Address Translation:** `PhysicalAddr = ((VPN + PTB) << 12) | Offset`.
-- **Protection:** Access to physical addresses `< 0x10000` (64KB Kernel Protected Zone) triggers a Page Fault.
+- **PTB Format:** `[63:32]` Virtual Page Limit, `[31:0]` Physical Base Page Number.
+- **Address Translation:** `PhysicalAddr = ((VPN + PTB[31:0]) << 12) | Offset`.
+- **Protection:** 
+    - **Boundary Check:** Access to `VPN >= PTB[63:32]` triggers a Page Fault.
+    - **I/O Exemption:** Memory-Mapped UART at `0x10000000` is always accessible and bypasses translation.
 - **Transparency:** The MMU is transparent in Machine Mode (`STATUS[0] == 1`).

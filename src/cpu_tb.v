@@ -41,7 +41,11 @@ module cpu_tb;
 
     always @(posedge clk) begin
         if (dmem_we) begin
-            dmem[dmem_addr[13:3]] <= dmem_wdata;
+            if (dmem_addr == 64'h10000000) begin
+                $write("%c", dmem_wdata[7:0]);
+            end else begin
+                dmem[dmem_addr[13:3]] <= dmem_wdata;
+            end
         end
     end
 
