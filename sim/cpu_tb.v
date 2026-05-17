@@ -40,11 +40,20 @@ module cpu_tb;
     assign dmem_rdata = dmem[dmem_addr[13:3]];
 
     always @(posedge clk) begin
+        if (!rst && !sleep_mode) begin
+            $display("TRACE PC=%016X", dut.pc);
+            if (dut.rf_we && dut.rd != 0) begin
+                $display("TRACE REG %02d=%016X", dut.rd, dut.rf_wd);
+            end
+        end
         if (dmem_we) begin
             if (dmem_addr == 64'h10000000) begin
                 $write("%c", dmem_wdata[7:0]);
             end else begin
                 dmem[dmem_addr[13:3]] <= dmem_wdata;
+                if (!rst && !sleep_mode) begin
+                    $display("TRACE MEM %016X=%016X", dmem_addr, dmem_wdata);
+                end
             end
         end
     end
@@ -52,9 +61,14 @@ module cpu_tb;
     // Clock generation
     always #5 clk = ~clk;
 
+    reg [2047:0] hex_file;
     initial begin
         // Initialize memory
-        $readmemh("timer_test.hex", imem);
+        if ($value$plusargs("HEX_FILE=%s", hex_file)) begin
+            $readmemh(hex_file, imem);
+        end else begin
+            $readmemh("timer_test.hex", imem);
+        end
         
         // Setup GTKWave dump
         $dumpfile("cpu_tb.vcd");

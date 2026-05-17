@@ -2,7 +2,8 @@
 import sys
 
 class NanoCore64Emulator:
-    def __init__(self):
+    def __init__(self, trace=False):
+        self.trace = trace
         self.regs = [0] * 32
         self.inst_mem = [0] * 4096 # 16KB Instruction Memory
         self.data_mem = [0] * 4096 # 32KB Data Memory (using 64-bit words)
@@ -43,6 +44,7 @@ class NanoCore64Emulator:
     def write_reg(self, reg, val):
         if reg != 0:
             self.regs[reg] = val & 0xFFFFFFFFFFFFFFFF
+            if self.trace: print(f"TRACE REG {reg:02d}={self.regs[reg]:016X}")
 
     def check_page_fault(self, vpn, paddr):
         if self.csrs[3] == 0 or self.priv_mode != 0:
@@ -96,6 +98,7 @@ class NanoCore64Emulator:
         word_addr = (paddr >> 3)
         if 0 <= word_addr < len(self.data_mem):
             self.data_mem[word_addr] = val & 0xFFFFFFFFFFFFFFFF
+            if self.trace: print(f"TRACE MEM {paddr:016X}={val:016X}")
         return True
 
     def step(self):
@@ -112,6 +115,8 @@ class NanoCore64Emulator:
             return True
 
         if self.halted: return False
+
+        if self.trace: print(f"TRACE PC={self.pc:016X}")
 
         # Instruction fetch
         inst_paddr = self.pc
@@ -222,10 +227,13 @@ class NanoCore64Emulator:
             if (i + 1) % 2 == 0: print()
 
 if __name__ == "__main__":
+    import sys
+    trace = "--trace" in sys.argv
+    if trace: sys.argv.remove("--trace")
     if len(sys.argv) != 2:
-        print("Usage: python3 emulator.py <program.hex>")
+        print("Usage: python3 emulator.py [--trace] <program.hex>")
         sys.exit(1)
-    emu = NanoCore64Emulator()
+    emu = NanoCore64Emulator(trace=trace)
     emu.load_hex(sys.argv[1])
     print("--- Starting Execution ---")
     cycles = 0

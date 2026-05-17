@@ -26,7 +26,7 @@ module mmu (
     wire [31:0] base_ppn    = mmu_ptb[31:0];
     wire [31:0] vpn_limit    = mmu_ptb[63:32];
     
-    wire is_uart       = (physical_addr == 64'h0000_0000_1000_0000);
+    wire is_uart       = (virtual_addr == 64'h0000_0000_1000_0000);
     wire out_of_bounds = (vpn >= vpn_limit) && !is_uart;
     wire [51:0] ppn    = vpn + {20'd0, base_ppn};
     
