@@ -102,9 +102,6 @@ class NanoCore64Emulator:
         return True
 
     def step(self):
-        self.mtime += 1
-        self.csrs[5] = self.mtime
-
         if (self.csrs[0] & 2) and (self.mtime >= self.csrs[6]):
             self.csrs[1] = self.pc
             self.csrs[2] = 3 # Timer Interrupt
@@ -219,6 +216,8 @@ class NanoCore64Emulator:
             self.halted = True
 
         self.pc = next_pc & 0xFFFFFFFFFFFFFFFF
+        self.mtime += 1
+        self.csrs[5] = self.mtime
         return not self.halted
 
     def dump(self):
