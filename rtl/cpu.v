@@ -292,8 +292,14 @@ module cpu (
                 end
 
                 6'h0F: begin // CSRW
-                    csr_we    = 1'b1;
-                    csr_wdata = rf_rd1;
+                    if (priv_mode == 1'b0) begin
+                        trap_req   = 1'b1;
+                        trap_cause = 64'd4; // Privilege Violation
+                        pc_calc    = 64'h0000_0000_0000_0000;
+                    end else begin
+                        csr_we    = 1'b1;
+                        csr_wdata = rf_rd1;
+                    end
                 end
 
                 6'h10: begin // SYSCALL

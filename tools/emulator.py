@@ -197,9 +197,15 @@ class NanoCore64Emulator:
         elif opcode == 0x0E: # CSRR
             self.write_reg(rd, self.csrs.get(imm16, 0))
         elif opcode == 0x0F: # CSRW
-            self.csrs[imm16] = self.regs[rs1]
-            if imm16 == 0:
-                self.priv_mode = self.regs[rs1] & 1
+            if self.priv_mode == 0:
+                self.csrs[1] = self.pc
+                self.csrs[2] = 4 # Privilege Violation
+                self.priv_mode = 1
+                next_pc = 0
+            else:
+                self.csrs[imm16] = self.regs[rs1]
+                if imm16 == 0:
+                    self.priv_mode = self.regs[rs1] & 1
         elif opcode == 0x10: # SYSCALL
             self.csrs[1] = self.pc
             self.csrs[2] = 1 # Syscall cause

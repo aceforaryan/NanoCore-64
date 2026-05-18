@@ -1,0 +1,68 @@
+
+9. Executing STA pass (static timing analysis).
+Warning: Cell type '$_NOT_' not recognised! Ignoring.
+Warning: Cell type '$_AND_' not recognised! Ignoring.
+Warning: Cell type '$_XOR_' not recognised! Ignoring.
+Warning: Cell type '$_ANDNOT_' not recognised! Ignoring.
+Warning: Cell type '$_NAND_' not recognised! Ignoring.
+Warning: Cell type '$_OR_' not recognised! Ignoring.
+Warning: Cell type '$_ORNOT_' not recognised! Ignoring.
+Warning: Cell type '$_MUX_' not recognised! Ignoring.
+Warning: Cell type '$_XNOR_' not recognised! Ignoring.
+Warning: Cell type '$_NOR_' not recognised! Ignoring.
+Warning: Cell type '$_DFFE_PP0P_' not recognised! Ignoring.
+Warning: Cell type 'mmu' is not a black- nor white-box! Ignoring.
+Warning: Cell type 'mmu' is not a black- nor white-box! Ignoring.
+Warning: Cell type 'alu' is not a black- nor white-box! Ignoring.
+Warning: Cell type 'csr' is not a black- nor white-box! Ignoring.
+Warning: Cell type 'timer' is not a black- nor white-box! Ignoring.
+Warning: Cell type 'regfile' is not a black- nor white-box! Ignoring.
+No timing paths found.
+Warning: Cell type '$_NOT_' not recognised! Ignoring.
+Warning: Cell type '$_AND_' not recognised! Ignoring.
+Warning: Cell type '$_NAND_' not recognised! Ignoring.
+Warning: Cell type '$_XNOR_' not recognised! Ignoring.
+Warning: Cell type '$_XOR_' not recognised! Ignoring.
+Warning: Cell type '$_ORNOT_' not recognised! Ignoring.
+Warning: Cell type '$_ANDNOT_' not recognised! Ignoring.
+Warning: Cell type '$_OR_' not recognised! Ignoring.
+Warning: Cell type '$_NOR_' not recognised! Ignoring.
+Warning: Cell type '$_DFF_PP0_' not recognised! Ignoring.
+No timing paths found.
+Warning: Cell type '$_NOR_' not recognised! Ignoring.
+Warning: Cell type '$_ANDNOT_' not recognised! Ignoring.
+Warning: Cell type '$_NAND_' not recognised! Ignoring.
+Warning: Cell type '$_AND_' not recognised! Ignoring.
+Warning: Cell type '$_DFFE_PP0P_' not recognised! Ignoring.
+No timing paths found.
+Warning: Cell type '$_NAND_' not recognised! Ignoring.
+Warning: Cell type '$_OR_' not recognised! Ignoring.
+Warning: Cell type '$_XOR_' not recognised! Ignoring.
+Warning: Cell type '$_ORNOT_' not recognised! Ignoring.
+Warning: Cell type '$_AND_' not recognised! Ignoring.
+Warning: Cell type '$_NOR_' not recognised! Ignoring.
+Warning: Cell type '$_ANDNOT_' not recognised! Ignoring.
+Warning: Cell type '$_XNOR_' not recognised! Ignoring.
+No timing paths found.
+Warning: Cell type '$_NOT_' not recognised! Ignoring.
+Warning: Cell type '$_NOR_' not recognised! Ignoring.
+Warning: Cell type '$_AND_' not recognised! Ignoring.
+Warning: Cell type '$_ANDNOT_' not recognised! Ignoring.
+Warning: Cell type '$_NAND_' not recognised! Ignoring.
+Warning: Cell type '$_MUX_' not recognised! Ignoring.
+Warning: Cell type '$_ORNOT_' not recognised! Ignoring.
+Warning: Cell type '$_OR_' not recognised! Ignoring.
+Warning: Cell type '$_DFFE_PP1P_' not recognised! Ignoring.
+Warning: Cell type '$_DFFE_PP0P_' not recognised! Ignoring.
+No timing paths found.
+Warning: Cell type '$_NOT_' not recognised! Ignoring.
+Warning: Cell type '$_NOR_' not recognised! Ignoring.
+Warning: Cell type '$_NAND_' not recognised! Ignoring.
+Warning: Cell type '$_ORNOT_' not recognised! Ignoring.
+Warning: Cell type '$_AND_' not recognised! Ignoring.
+Warning: Cell type '$_OR_' not recognised! Ignoring.
+Warning: Cell type '$_XNOR_' not recognised! Ignoring.
+Warning: Cell type '$_XOR_' not recognised! Ignoring.
+Warning: Cell type '$_ANDNOT_' not recognised! Ignoring.
+Warning: Cell type '$_MUX_' not recognised! Ignoring.
+No timing paths found.

@@ -1,0 +1,178 @@
+
+10. Printing statistics.
+
+=== cpu ===
+
+        +----------Local Count, excluding submodules.
+        | 
+     2380 wires
+     4023 wire bits
+       51 public wires
+     1694 public wire bits
+       10 ports
+      293 port bits
+     2730 cells
+       62   $_ANDNOT_
+      888   $_AND_
+       64   $_DFFE_PP0P_
+       73   $_MUX_
+      857   $_NAND_
+       55   $_NOR_
+        5   $_NOT_
+       51   $_ORNOT_
+      293   $_OR_
+      247   $_XNOR_
+      135   $_XOR_
+        6 submodules
+        1   alu
+        1   csr
+        2   mmu
+        1   regfile
+        1   timer
+
+=== timer ===
+
+        +----------Local Count, excluding submodules.
+        | 
+      394 wires
+      646 wire bits
+        5 public wires
+      131 public wire bits
+        5 ports
+      131 port bits
+      516 cells
+       11   $_ANDNOT_
+      157   $_AND_
+       64   $_DFF_PP0_
+       86   $_NAND_
+        9   $_NOR_
+        1   $_NOT_
+      113   $_ORNOT_
+        1   $_OR_
+       12   $_XNOR_
+       62   $_XOR_
+
+=== regfile ===
+
+        +----------Local Count, excluding submodules.
+        | 
+     8014 wires
+    10294 wire bits
+       42 public wires
+     2322 public wire bits
+       11 ports
+      338 port bits
+    10084 cells
+       38   $_ANDNOT_
+     3957   $_AND_
+     1984   $_DFFE_PP0P_
+     4099   $_NAND_
+        6   $_NOR_
+
+=== mmu ===
+
+        +----------Local Count, excluding submodules.
+        | 
+      589 wires
+      902 wire bits
+       10 public wires
+      323 public wire bits
+        6 ports
+      195 port bits
+      632 cells
+        8   $_ANDNOT_
+      164   $_AND_
+      244   $_NAND_
+       68   $_NOR_
+       56   $_ORNOT_
+       42   $_OR_
+       10   $_XNOR_
+       40   $_XOR_
+
+=== csr ===
+
+        +----------Local Count, excluding submodules.
+        | 
+      843 wires
+     1993 wire bits
+       24 public wires
+      984 public wire bits
+       18 ports
+      600 port bits
+     1457 cells
+        5   $_ANDNOT_
+      346   $_AND_
+      319   $_DFFE_PP0P_
+       65   $_DFFE_PP1P_
+      192   $_MUX_
+      514   $_NAND_
+        8   $_NOR_
+        1   $_NOT_
+        2   $_ORNOT_
+        5   $_OR_
+
+=== alu ===
+
+        +----------Local Count, excluding submodules.
+        | 
+     2236 wires
+     2427 wire bits
+        5 public wires
+      196 public wire bits
+        5 ports
+      196 port bits
+     2296 cells
+       32   $_ANDNOT_
+      479   $_AND_
+      548   $_MUX_
+      698   $_NAND_
+       25   $_NOR_
+       25   $_NOT_
+       72   $_ORNOT_
+      261   $_OR_
+      101   $_XNOR_
+       55   $_XOR_
+
+=== design hierarchy ===
+
+        +----------Count including submodules.
+        | 
+    18347 cpu
+     2296 alu
+     1457 csr
+      632 mmu
+    10084 regfile
+      516 timer
+
+        +----------Count including submodules.
+        | 
+    15045 wires
+    21187 wire bits
+      147 public wires
+     5973 public wire bits
+       61 ports
+     1948 port bits
+        - memories
+        - memory bits
+        - processes
+    18347 cells
+      164   $_ANDNOT_
+     6155   $_AND_
+     2367   $_DFFE_PP0P_
+       65   $_DFFE_PP1P_
+       64   $_DFF_PP0_
+      813   $_MUX_
+     6742   $_NAND_
+      239   $_NOR_
+       32   $_NOT_
+      350   $_ORNOT_
+      644   $_OR_
+      380   $_XNOR_
+      332   $_XOR_
+        6 submodules
+        1   alu
+        1   csr
+        2   mmu
+        1   regfile
+        1   timer
+
