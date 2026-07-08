@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import re
+import os
 
 OPCODES = {
     "NOP":   0x00,
@@ -48,9 +49,34 @@ def parse_immediate(imm_str):
     else:
         return int(imm_str)
 
+def preprocess(file_path, defines=None):
+    if defines is None:
+        defines = {}
+    lines = []
+    base_dir = os.path.dirname(os.path.abspath(file_path))
+    with open(file_path, 'r') as f:
+        for line in f:
+            line_str = line.strip()
+            if line_str.startswith('#include'):
+                match = re.search(r'#include\s+"([^"]+)"', line_str)
+                if match:
+                    include_file = match.group(1)
+                    include_path = os.path.join(base_dir, include_file)
+                    lines.extend(preprocess(include_path, defines))
+                else:
+                    raise ValueError(f"Invalid include syntax: {line_str}")
+            elif line_str.startswith('#define'):
+                parts = line_str.split(None, 2)
+                if len(parts) >= 3:
+                    defines[parts[1]] = parts[2].split('//')[0].split(';')[0].strip()
+            else:
+                for k, v in defines.items():
+                    line = re.sub(r'\b' + re.escape(k) + r'\b', v, line)
+                lines.append(line)
+    return lines
+
 def assemble(input_file, output_file):
-    with open(input_file, 'r') as f:
-        lines = f.readlines()
+    lines = preprocess(input_file)
 
     # Pass 1: Resolve Labels
     labels = {}
