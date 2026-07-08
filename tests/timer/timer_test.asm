@@ -1,4 +1,6 @@
-; Timer and External Interrupts Verification Test
+; tests/timer/timer_test.asm
+#include "../common/constants.inc"
+#include "../common/passfail.inc"
 
     ; PC=0: Initial Boot or Trap Vector
     ; Read CAUSE (CSR 2)
@@ -10,26 +12,16 @@ trap_handler:
     ; Check if CAUSE is 3 (Timer Interrupt)
     CSRR R22, 2
     ADDI R24, R0, 3
-    BNE R22, R24, loop_fail
+    BNE R22, R24, test_fail
     
-    ; Write Magic Signature indicating Timer Interrupt Successfully handled
-    ADDI R20, R0, 4919 ; 0x1337.
-
     ; Disable interrupts by writing 1 to STATUS (M-mode, GIE=0)
     ADDI R5, R0, 1
     CSRW 0, R5
 
     ; Success exit
-    SLEEP
-
-loop_fail:
-    ADDI R21, R0, 999
-    SLEEP
+    JAL R0, test_pass
 
 boot:
-    ; Record that we began execution
-    ADDI R21, R0, 1
-
     ; Read current mtime (CSR 5)
     CSRR R10, 5
     
@@ -45,7 +37,4 @@ boot:
     ADDI R5, R0, 3
     CSRW 0, R5
 
-    ; CPU should now enter low-power sleep mode and halt the pipeline.
-    ; Exactly 50 cycles later, the hardware timer will assert the interrupt line,
-    ; waking up the CPU, triggering a trap, and sending PC back to 0!
     SLEEP
