@@ -48,6 +48,12 @@ Used for long range jumps.
 | `100011`| ANDI     | I      | `Rd = Rs1 & Sext(Imm)` |
 | `000100`| OR       | R      | `Rd = Rs1 | Rs2` |
 | `100100`| ORI      | I      | `Rd = Rs1 | Sext(Imm)` |
+| `000101`| XOR      | R      | `Rd = Rs1 ^ Rs2` |
+| `100101`| XORI     | I      | `Rd = Rs1 ^ Sext(Imm)` |
+| `000110`| SHL      | R      | `Rd = Rs1 << Rs2[5:0]` |
+| `100110`| SHLI     | I      | `Rd = Rs1 << Imm[5:0]` |
+| `000111`| SHR      | R      | `Rd = Rs1 >> Rs2[5:0]` |
+| `100111`| SHRI     | I      | `Rd = Rs1 >> Imm[5:0]` |
 | `001000`| LD       | I      | `Rd = MEM64[Rs1 + Sext(Imm)]` (Load Double Word) |
 | `001001`| ST       | I      | `MEM64[Rs1 + Sext(Imm)] = Rd` (Store Double Word) |
 | `001010`| BEQ      | I      | `if (Rd == Rs1) PC = PC + 4 + Sext(Imm)<<2` (Offset is relative to PC+4) |
@@ -81,3 +87,13 @@ When `MMU_PTB > 0` and `STATUS[0] == 0` (User Mode):
     - **Boundary Check:** Access to `VPN >= PTB[63:32]` triggers a Page Fault.
     - **I/O Exemption:** Memory-Mapped UART at `0x10000000` is always accessible and bypasses translation.
 - **Transparency:** The MMU is transparent in Machine Mode (`STATUS[0] == 1`).
+
+## Memory-Mapped I/O (MMIO)
+Certain physical memory addresses bypass the MMU and are reserved for peripherals and testbench control.
+- **`0x10000000`**: UART TX (Write-only, outputs an ASCII character to the console).
+- **`0x20000000`**: `TEST_STATUS_ADDR` (Write-only, terminates the RTL simulation).
+  - `0x00`: `TEST_PASS`
+  - `0x01`: `TEST_ASSERT_FAIL`
+  - `0x02`: `TEST_EXCEPTION`
+  - `0x03`: `TEST_TIMEOUT`
+  - `0x04`: `TEST_UNKNOWN`
