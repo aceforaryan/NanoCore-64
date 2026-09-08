@@ -1,6 +1,4 @@
 ; tests/exception/privilege_test.asm
-#include "../common/constants.inc"
-#include "../common/passfail.inc"
 
     ; Reset / Trap Vector at 0x0000
     CSRR R31, 2         ; Read CAUSE
@@ -33,3 +31,5 @@ boot:
 
     ; If we reach here, the trap didn't happen!
     JAL R0, test_fail
+
+#include "../common/passfail.inc"

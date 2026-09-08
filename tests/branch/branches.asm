@@ -1,6 +1,4 @@
 ; tests/branch/branches.asm
-#include "../common/constants.inc"
-#include "../common/passfail.inc"
 
     ADDI R1, R0, 10
     ADDI R2, R0, 10
@@ -33,3 +31,5 @@ loop_start:
     BNE R8, R0, loop_start
 
     JAL R0, test_pass
+
+#include "../common/passfail.inc"

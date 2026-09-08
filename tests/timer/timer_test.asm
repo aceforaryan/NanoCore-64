@@ -1,6 +1,4 @@
 ; tests/timer/timer_test.asm
-#include "../common/constants.inc"
-#include "../common/passfail.inc"
 
     ; PC=0: Initial Boot or Trap Vector
     ; Read CAUSE (CSR 2)
@@ -38,3 +36,5 @@ boot:
     CSRW 0, R5
 
     SLEEP
+
+#include "../common/passfail.inc"

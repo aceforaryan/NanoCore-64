@@ -1,6 +1,4 @@
 ; tests/alu/arithmetic.asm
-#include "../common/constants.inc"
-#include "../common/passfail.inc"
 
     ; --- Test 1: Basic Addition (ADD) ---
     ADDI R1, R0, 10
@@ -37,3 +35,5 @@
     BNE  R11, R12, test_fail
 
     JAL R0, test_pass
+
+#include "../common/passfail.inc"

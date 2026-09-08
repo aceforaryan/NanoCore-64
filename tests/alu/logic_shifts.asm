@@ -1,6 +1,4 @@
 ; tests/alu/logic_shifts.asm
-#include "../common/constants.inc"
-#include "../common/passfail.inc"
 
     ; Setup some values
     ADDI R1, R0, 10      ; 1010
@@ -55,3 +53,5 @@
     BNE R15, R31, test_fail
 
     JAL R0, test_pass
+
+#include "../common/passfail.inc"

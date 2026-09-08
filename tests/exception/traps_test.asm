@@ -1,6 +1,4 @@
 ; tests/exception/traps_test.asm
-#include "../common/constants.inc"
-#include "../common/passfail.inc"
 
     ; Check CAUSE (CSR 2) to determine why we are at PC=0
     CSRR R10, 2
@@ -14,7 +12,10 @@ trap_handler:
     ADDI R12, R0, 4
     ADD R11, R11, R12
     CSRW 1, R11
-    ; Return from exception (drops back to previous privilege mode and jumps to EPC)
+    ; Restore User Mode for return (STATUS = 0: User, GIE=0)
+    ADDI R5, R0, 0
+    CSRW 0, R5
+    ; Return from exception (restores privilege from STATUS[0] and jumps to EPC)
     RET
 
 boot:
@@ -36,3 +37,5 @@ boot:
     BNE R21, R31, test_fail
 
     JAL R0, test_pass
+
+#include "../common/passfail.inc"

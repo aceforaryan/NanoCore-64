@@ -1,6 +1,4 @@
 ; tests/memory/memory.asm
-#include "../common/constants.inc"
-#include "../common/passfail.inc"
 
     ; Setup base address
     ADDI R1, R0, 1024
@@ -24,3 +22,5 @@
     BNE R6, R7, test_fail
 
     JAL R0, test_pass
+
+#include "../common/passfail.inc"

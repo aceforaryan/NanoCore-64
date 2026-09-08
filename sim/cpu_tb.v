@@ -103,8 +103,10 @@ module cpu_tb;
     parameter MAX_SIM_CYCLES = 50000;
 
     reg [2047:0] hex_file;
+    integer j;
     initial begin
         cycle_count = 0;
+        for (j = 0; j < 2048; j = j + 1) dmem[j] = 64'd0;
         
         if ($value$plusargs("HEX_FILE=%s", hex_file)) begin
             $readmemh(hex_file, imem);

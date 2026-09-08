@@ -1,6 +1,4 @@
 ; tests/mmu/mmu_test.asm
-#include "../common/constants.inc"
-#include "../common/passfail.inc"
 
     ; Check CAUSE (CSR 2)
     CSRR R10, 2
@@ -28,3 +26,5 @@ boot:
     ; The VERY NEXT INSTRUCTION FETCH should trigger a Page Fault!
     ; This instruction should never execute!
     JAL R0, test_fail
+
+#include "../common/passfail.inc"
