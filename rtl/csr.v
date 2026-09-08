@@ -84,10 +84,9 @@ module csr (
             status[0] <= 1'b1;
             status[1] <= 1'b0;      // Disable interrupts on trap entry
         end else if (eret_req) begin
-            // Return from exception
-            priv_mode <= 1'b0;      // Drop to User Mode (Wait, maybe restore from status. Keep simple 0 for now)
-            status[0] <= 1'b0;
-            status[1] <= 1'b1;      // Re-enable interrupts roughly
+            // Return from exception: restore privilege from STATUS[0].
+            // Software must configure STATUS via CSRW before RET.
+            priv_mode <= status[0];
 
         end else if (csr_we && priv_mode == 1'b1) begin
             case (csr_addr)

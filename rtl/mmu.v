@@ -27,7 +27,7 @@ module mmu (
     wire [31:0] vpn_limit    = mmu_ptb[63:32];
     
     wire is_uart       = (virtual_addr == 64'h0000_0000_1000_0000);
-    wire out_of_bounds = (vpn >= vpn_limit) && !is_uart;
+    wire out_of_bounds = (vpn >= {20'd0, vpn_limit}) && !is_uart;
     wire [51:0] ppn    = vpn + {20'd0, base_ppn};
     
     assign physical_addr = vmem_enabled ? (is_uart ? virtual_addr : {ppn, page_offset}) : virtual_addr;

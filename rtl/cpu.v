@@ -286,9 +286,15 @@ module cpu (
                     pc_calc   = rf_rd1 + imm16_sext;
                 end
 
-                6'h0E: begin // CSRR
-                    rf_we     = 1'b1;
-                    rf_wd_mux = csr_rdata;
+                6'h0E: begin // CSRR (M-Mode only per ISA)
+                    if (priv_mode == 1'b0) begin
+                        trap_req   = 1'b1;
+                        trap_cause = 64'd4; // Privilege Violation
+                        pc_calc    = 64'h0000_0000_0000_0000;
+                    end else begin
+                        rf_we     = 1'b1;
+                        rf_wd_mux = csr_rdata;
+                    end
                 end
 
                 6'h0F: begin // CSRW
