@@ -6,6 +6,7 @@ import glob
 import json
 import time
 import shutil
+from pathlib import Path
 from datetime import datetime
 
 class ArtifactManager:
@@ -182,9 +183,9 @@ class RegressionRunner:
 
         for asm_file in sorted(test_files):
             # Parse category from path: tests/<category>/<test_name>.asm
-            parts = asm_file.split(os.sep)
-            category = parts[1]
-            test_name = parts[2].replace(".asm", "")
+            parts = Path(asm_file).parts
+            category = parts[-2]
+            test_name = Path(parts[-1]).stem
             
             print(f"Running {category}/{test_name}...", end=" ", flush=True)
 
