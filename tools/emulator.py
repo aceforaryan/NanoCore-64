@@ -102,11 +102,14 @@ class NanoCore64Emulator:
         return True
 
     def step(self):
+        # mtime always advances every cycle, including during SLEEP (halted)
+        self.mtime += 1
+        self.csrs[5] = self.mtime
         if (self.csrs[0] & 2) and (self.mtime >= self.csrs[6]):
             self.csrs[1] = self.pc
             self.csrs[2] = 3 # Timer Interrupt
             self.priv_mode = 1
-            self.csrs[0] = self.csrs[0] & ~2 # Disable interrupts
+            self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
             self.pc = 0
             self.halted = False
             return True
@@ -128,6 +131,7 @@ class NanoCore64Emulator:
         if self.check_page_fault(inst_vpn, inst_paddr):
             self.csrs[1] = self.pc
             self.csrs[2] = 2 # Page Fault
+            self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
             self.priv_mode = 1
             self.pc = 0
             return True
@@ -173,6 +177,7 @@ class NanoCore64Emulator:
             if val is None:
                 self.csrs[1] = self.pc
                 self.csrs[2] = 2 # Page Fault
+                self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
                 self.priv_mode = 1
                 self.pc = 0
                 return True
@@ -181,6 +186,7 @@ class NanoCore64Emulator:
             if not self.write_mem(self.regs[rs1] + imm16_ext, self.regs[rd]):
                 self.csrs[1] = self.pc
                 self.csrs[2] = 2 # Page Fault
+                self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
                 self.priv_mode = 1
                 self.pc = 0
                 return True
@@ -194,12 +200,20 @@ class NanoCore64Emulator:
         elif opcode == 0x0D: # JALR
             self.write_reg(rd, self.pc + 4)
             next_pc = self.regs[rs1] + imm16_ext
-        elif opcode == 0x0E: # CSRR
-            self.write_reg(rd, self.csrs.get(imm16, 0))
+        elif opcode == 0x0E: # CSRR (M-Mode only per ISA)
+            if self.priv_mode == 0:
+                self.csrs[1] = self.pc
+                self.csrs[2] = 4  # Privilege Violation
+                self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
+                self.priv_mode = 1
+                next_pc = 0
+            else:
+                self.write_reg(rd, self.csrs.get(imm16, 0))
         elif opcode == 0x0F: # CSRW
             if self.priv_mode == 0:
                 self.csrs[1] = self.pc
                 self.csrs[2] = 4 # Privilege Violation
+                self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
                 self.priv_mode = 1
                 next_pc = 0
             else:
@@ -209,9 +223,12 @@ class NanoCore64Emulator:
         elif opcode == 0x10: # SYSCALL
             self.csrs[1] = self.pc
             self.csrs[2] = 1 # Syscall cause
+            self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
             self.priv_mode = 1
             next_pc = 0
         elif opcode == 0x11: # RET
+            # Restore privilege from STATUS[0], jump to EPC
+            # Software must configure STATUS via CSRW before RET
             self.priv_mode = self.csrs[0] & 1
             next_pc = self.csrs[1]
         elif opcode == 0x3F: # SLEEP
@@ -222,8 +239,6 @@ class NanoCore64Emulator:
             self.halted = True
 
         self.pc = next_pc & 0xFFFFFFFFFFFFFFFF
-        self.mtime += 1
-        self.csrs[5] = self.mtime
         return not self.halted
 
     def dump(self):
@@ -250,3 +265,5 @@ if __name__ == "__main__":
             break
     print(f"--- Finished after {cycles} cycles ---")
     emu.dump()
+
+
