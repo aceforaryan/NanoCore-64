@@ -94,13 +94,13 @@ The Python ISS (`tools/emulator.py`) implements the same ISA as the RTL. It can 
 
 The following previously-identified verification gaps have been closed and verified against both RTL and Emulator:
 
-- Shift by 0 and shift by 63 (boundary) -> Covered by lu/shift_boundary
-- Maximum/minimum signed values in arithmetic -> Covered by lu/arith_boundary
-- JALR instruction -> Covered by ranch/jalr_test
-- NOP instruction -> Covered by lu/shift_boundary
+- Shift by 0 and shift by 63 (boundary) -> Covered by alu/shift_boundary
+- Maximum/minimum signed values in arithmetic -> Covered by alu/arith_boundary
+- JALR instruction -> Covered by branch/jalr_test
+- NOP instruction -> Covered by alu/shift_boundary
 - Multiple back-to-back traps -> Covered by exception/back_to_back_traps (Note: Nested traps are not architecturally supported; only sequential traps are supported)
 - CSR read-after-write in consecutive cycles -> Covered by csr/csr_write_read
-- Timer counter rollover (64-bit) -> Covered by 	imer/timer_rollover (tests minimum timecmp and increment behavior)
+- Timer counter rollover (64-bit) -> Covered by timer/timer_rollover (tests minimum timecmp and increment behavior)
 - Instruction fetch from translated addresses -> Covered by mmu/mmu_valid_fetch
 
 Remaining limitations:
