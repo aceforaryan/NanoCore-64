@@ -1,5 +1,40 @@
 #!/usr/bin/env python3
+"""
+NanoCore-64 Instruction Set Simulator (ISS)
+
+Cycle Model:
+  Each call to step() represents one CPU clock cycle.
+  Within each cycle, the following operations occur in order:
+
+  1. mtime increments (mtime = mtime + 1)
+     - This models the RTL timer.v sequential increment on posedge clk.
+  2. Timer interrupt check
+     - interrupt_req = GIE && (mtime >= TIMECMP)
+     - If true: trap entry (EPC=PC, CAUSE=3, M-mode, GIE=0, PC=0)
+     - This models the RTL combinational interrupt_req check against
+       the just-updated registered mtime value.
+  3. If halted (SLEEP): no instruction executes, step returns.
+  4. Instruction fetch via MMU
+     - Page fault check on instruction address.
+  5. Decode and execute
+     - Register reads, ALU, memory, CSR, control flow.
+  6. PC update
+     - next_pc is committed.
+
+  This ordering matches the RTL single-cycle datapath where:
+  - timer.v increments mtime on posedge clk
+  - cpu.v combinational decode sees the new mtime via interrupt_req
+  - if no interrupt, the instruction at current PC executes
+  - PC register updates on the next posedge clk
+"""
 import sys
+
+# TEST_STATUS codes (matching testbench MMIO at 0x20000000)
+TEST_PASS = 0x00
+TEST_ASSERT_FAIL = 0x01
+TEST_EXCEPTION = 0x02
+TEST_TIMEOUT = 0x03
+TEST_UNKNOWN = 0x04
 
 class NanoCore64Emulator:
     def __init__(self, trace=False):
@@ -23,6 +58,8 @@ class NanoCore64Emulator:
         self.mtime = 0
         self.pc = 0
         self.halted = False
+        self.cycle = 0
+        self.test_status = None  # None = still running, int = finished
 
     def load_hex(self, filename):
         with open(filename, 'r') as f:
@@ -46,6 +83,14 @@ class NanoCore64Emulator:
             self.regs[reg] = val & 0xFFFFFFFFFFFFFFFF
             if self.trace: print(f"TRACE REG {reg:02d}={self.regs[reg]:016X}")
 
+    def _take_trap(self, cause):
+        """Hardware trap entry: save state, enter M-mode, disable interrupts."""
+        self.csrs[1] = self.pc          # EPC <- PC
+        self.csrs[2] = cause            # CAUSE <- cause code
+        self.priv_mode = 1              # Enter M-mode
+        self.csrs[0] = (self.csrs[0] & ~3) | 1  # STATUS[0]=1 (M-mode), STATUS[1]=0 (GIE off)
+        self.pc = 0                     # PC <- trap vector
+
     def check_page_fault(self, vpn, paddr):
         if self.csrs[3] == 0 or self.priv_mode != 0:
             return False
@@ -59,8 +104,8 @@ class NanoCore64Emulator:
             
         return False
 
-    def read_mem(self, vaddr):
-        paddr = vaddr
+    def _translate_addr(self, vaddr):
+        """Translate virtual address through MMU. Returns (paddr, page_fault)."""
         vpn = (vaddr >> 12)
         if self.csrs[3] != 0 and self.priv_mode == 0:
             if vaddr == 0x10000000:
@@ -68,8 +113,14 @@ class NanoCore64Emulator:
             else:
                 base_ppn = self.csrs[3] & 0xFFFFFFFF
                 paddr = ((vpn + base_ppn) << 12) | (vaddr & 0xFFF)
-            
-        if self.check_page_fault(vpn, paddr):
+        else:
+            paddr = vaddr
+        fault = self.check_page_fault(vpn, paddr)
+        return paddr, fault
+
+    def read_mem(self, vaddr):
+        paddr, fault = self._translate_addr(vaddr)
+        if fault:
             return None # Indicate page fault
             
         word_addr = (paddr >> 3)
@@ -78,21 +129,18 @@ class NanoCore64Emulator:
         return 0
 
     def write_mem(self, vaddr, val):
-        paddr = vaddr
-        vpn = (vaddr >> 12)
-        if self.csrs[3] != 0 and self.priv_mode == 0:
-            if vaddr == 0x10000000:
-                paddr = vaddr
-            else:
-                base_ppn = self.csrs[3] & 0xFFFFFFFF
-                paddr = ((vpn + base_ppn) << 12) | (vaddr & 0xFFF)
-            
-        if self.check_page_fault(vpn, paddr):
+        paddr, fault = self._translate_addr(vaddr)
+        if fault:
             return False # Indicate page fault
             
         # Memory-Mapped UART
         if paddr == 0x10000000:
             print(chr(val & 0xFF), end='', flush=True)
+            return True
+
+        # Memory-Mapped TEST_STATUS
+        if paddr == 0x20000000:
+            self.test_status = val & 0xFFFFFFFFFFFFFFFF
             return True
 
         word_addr = (paddr >> 3)
@@ -102,43 +150,35 @@ class NanoCore64Emulator:
         return True
 
     def step(self):
-        # mtime always advances every cycle, including during SLEEP (halted)
+        """Execute one CPU clock cycle. Returns True if CPU is still active."""
+        self.cycle += 1
+
+        # Step 1: mtime increments every cycle (matches RTL timer.v posedge clk)
         self.mtime += 1
         self.csrs[5] = self.mtime
+
+        # Step 2: Check timer interrupt (combinational in RTL)
+        # interrupt_req = STATUS[1] (GIE) & (mtime >= TIMECMP)
         if (self.csrs[0] & 2) and (self.mtime >= self.csrs[6]):
-            self.csrs[1] = self.pc
-            self.csrs[2] = 3 # Timer Interrupt
-            self.priv_mode = 1
-            self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
-            self.pc = 0
+            self._take_trap(3)  # Timer Interrupt
             self.halted = False
             return True
 
+        # Step 3: If halted (SLEEP), no instruction executes
         if self.halted: return False
 
         if self.trace: print(f"TRACE PC={self.pc:016X}")
 
-        # Instruction fetch
-        inst_paddr = self.pc
-        inst_vpn = (self.pc >> 12)
-        if self.csrs[3] != 0 and self.priv_mode == 0:
-            if self.pc == 0x10000000:
-                inst_paddr = self.pc
-            else:
-                base_ppn = self.csrs[3] & 0xFFFFFFFF
-                inst_paddr = ((inst_vpn + base_ppn) << 12) | (self.pc & 0xFFF)
-            
-        if self.check_page_fault(inst_vpn, inst_paddr):
-            self.csrs[1] = self.pc
-            self.csrs[2] = 2 # Page Fault
-            self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
-            self.priv_mode = 1
-            self.pc = 0
+        # Step 4: Instruction fetch with MMU translation
+        inst_paddr, inst_fault = self._translate_addr(self.pc)
+        if inst_fault:
+            self._take_trap(2)  # Page Fault
             return True
 
         word_pc = inst_paddr >> 2
         inst = self.inst_mem[word_pc] if word_pc < len(self.inst_mem) else 0
         
+        # Decode
         opcode = inst & 0x3F
         rd  = (inst >> 6) & 0x1F
         rs1 = (inst >> 11) & 0x1F
@@ -149,9 +189,10 @@ class NanoCore64Emulator:
         imm16_ext = self.sign_extend(imm16, 16)
         imm21_ext = self.sign_extend(imm21, 21)
         
+        # Step 5: Execute
         next_pc = self.pc + 4
 
-        if opcode == 0x00: pass
+        if opcode == 0x00: pass  # NOP
         elif opcode in (0x01, 0x21): # ADD / ADDI
             b = imm16_ext if opcode == 0x21 else self.regs[rs2]
             self.write_reg(rd, self.regs[rs1] + b)
@@ -175,20 +216,12 @@ class NanoCore64Emulator:
         elif opcode == 0x08: # LD
             val = self.read_mem(self.regs[rs1] + imm16_ext)
             if val is None:
-                self.csrs[1] = self.pc
-                self.csrs[2] = 2 # Page Fault
-                self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
-                self.priv_mode = 1
-                self.pc = 0
+                self._take_trap(2)  # Page Fault
                 return True
             self.write_reg(rd, val)
         elif opcode == 0x09: # ST
             if not self.write_mem(self.regs[rs1] + imm16_ext, self.regs[rd]):
-                self.csrs[1] = self.pc
-                self.csrs[2] = 2 # Page Fault
-                self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
-                self.priv_mode = 1
-                self.pc = 0
+                self._take_trap(2)  # Page Fault
                 return True
         elif opcode == 0x0A: # BEQ
             if self.regs[rd] == self.regs[rs1]: next_pc = self.pc + 4 + (imm16_ext * 4)
@@ -202,30 +235,21 @@ class NanoCore64Emulator:
             next_pc = self.regs[rs1] + imm16_ext
         elif opcode == 0x0E: # CSRR (M-Mode only per ISA)
             if self.priv_mode == 0:
-                self.csrs[1] = self.pc
-                self.csrs[2] = 4  # Privilege Violation
-                self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
-                self.priv_mode = 1
-                next_pc = 0
+                self._take_trap(4)  # Privilege Violation
+                return True
             else:
                 self.write_reg(rd, self.csrs.get(imm16, 0))
         elif opcode == 0x0F: # CSRW
             if self.priv_mode == 0:
-                self.csrs[1] = self.pc
-                self.csrs[2] = 4 # Privilege Violation
-                self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
-                self.priv_mode = 1
-                next_pc = 0
+                self._take_trap(4)  # Privilege Violation
+                return True
             else:
                 self.csrs[imm16] = self.regs[rs1]
                 if imm16 == 0:
                     self.priv_mode = self.regs[rs1] & 1
         elif opcode == 0x10: # SYSCALL
-            self.csrs[1] = self.pc
-            self.csrs[2] = 1 # Syscall cause
-            self.csrs[0] = (self.csrs[0] & ~3) | 1  # M-mode, GIE=0
-            self.priv_mode = 1
-            next_pc = 0
+            self._take_trap(1)  # Syscall
+            return True
         elif opcode == 0x11: # RET
             # Restore privilege from STATUS[0], jump to EPC
             # Software must configure STATUS via CSRW before RET
@@ -238,6 +262,7 @@ class NanoCore64Emulator:
             print(f"Unknown opcode at PC={self.pc}: {opcode:02X}")
             self.halted = True
 
+        # Step 6: Update PC
         self.pc = next_pc & 0xFFFFFFFFFFFFFFFF
         return not self.halted
 
@@ -256,14 +281,20 @@ if __name__ == "__main__":
     emu = NanoCore64Emulator(trace=trace)
     emu.load_hex(sys.argv[1])
     print("--- Starting Execution ---")
-    cycles = 0
-    while cycles < 10000:
+    max_cycles = 50000
+    while emu.cycle < max_cycles:
         emu.step()
-        cycles += 1
-        # If halted and interrupts are disabled natively, we can safely exit early
+        # Check for test completion via TEST_STATUS MMIO
+        if emu.test_status is not None:
+            if emu.test_status == TEST_PASS:
+                print(f"\n--- PASS after {emu.cycle} cycles ---")
+            else:
+                print(f"\n--- FAIL (status={emu.test_status}) after {emu.cycle} cycles ---")
+            break
+        # If halted and interrupts are disabled, we can safely exit early
         if emu.halted and not (emu.csrs[0] & 2):
             break
-    print(f"--- Finished after {cycles} cycles ---")
+    else:
+        print(f"\n--- Timeout after {max_cycles} cycles ---")
+    print(f"--- Finished after {emu.cycle} cycles ---")
     emu.dump()
-
-
