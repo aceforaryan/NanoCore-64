@@ -37,8 +37,9 @@ TEST_TIMEOUT = 0x03
 TEST_UNKNOWN = 0x04
 
 class NanoCore64Emulator:
-    def __init__(self, trace=False):
+    def __init__(self, trace=False, trace_file=None):
         self.trace = trace
+        self.trace_file = trace_file  # File object for architectural trace output
         self.regs = [0] * 32
         self.inst_mem = [0] * 4096 # 16KB Instruction Memory
         self.data_mem = [0] * 4096 # 32KB Data Memory (using 64-bit words)
@@ -60,6 +61,9 @@ class NanoCore64Emulator:
         self.halted = False
         self.cycle = 0
         self.test_status = None  # None = still running, int = finished
+        
+        # Per-cycle trace event state (reset each cycle)
+        self._trace_events = {}
 
     def load_hex(self, filename):
         with open(filename, 'r') as f:
@@ -81,7 +85,9 @@ class NanoCore64Emulator:
     def write_reg(self, reg, val):
         if reg != 0:
             self.regs[reg] = val & 0xFFFFFFFFFFFFFFFF
-            if self.trace: print(f"TRACE REG {reg:02d}={self.regs[reg]:016X}")
+            self._trace_events['reg_write'] = (reg, self.regs[reg])
+            if self.trace and not self.trace_file:
+                print(f"TRACE REG {reg:02d}={self.regs[reg]:016X}")
 
     def _take_trap(self, cause):
         """Hardware trap entry: save state, enter M-mode, disable interrupts."""
@@ -90,6 +96,10 @@ class NanoCore64Emulator:
         self.priv_mode = 1              # Enter M-mode
         self.csrs[0] = (self.csrs[0] & ~3) | 1  # STATUS[0]=1 (M-mode), STATUS[1]=0 (GIE off)
         self.pc = 0                     # PC <- trap vector
+        if cause == 3:
+            self._trace_events['interrupt'] = cause
+        else:
+            self._trace_events['trap'] = cause
 
     def check_page_fault(self, vpn, paddr):
         if self.csrs[3] == 0 or self.priv_mode != 0:
@@ -125,7 +135,10 @@ class NanoCore64Emulator:
             
         word_addr = (paddr >> 3)
         if 0 <= word_addr < len(self.data_mem):
-            return self.data_mem[word_addr]
+            val = self.data_mem[word_addr]
+            self._trace_events['mem_read'] = (paddr, val)
+            return val
+        self._trace_events['mem_read'] = (paddr, 0)
         return 0
 
     def write_mem(self, vaddr, val):
@@ -136,22 +149,71 @@ class NanoCore64Emulator:
         # Memory-Mapped UART
         if paddr == 0x10000000:
             print(chr(val & 0xFF), end='', flush=True)
+            self._trace_events['mem_write'] = (paddr, val & 0xFF)
             return True
 
         # Memory-Mapped TEST_STATUS
         if paddr == 0x20000000:
             self.test_status = val & 0xFFFFFFFFFFFFFFFF
+            self._trace_events['mem_write'] = (paddr, val & 0xFFFFFFFFFFFFFFFF)
             return True
 
         word_addr = (paddr >> 3)
         if 0 <= word_addr < len(self.data_mem):
             self.data_mem[word_addr] = val & 0xFFFFFFFFFFFFFFFF
-            if self.trace: print(f"TRACE MEM {paddr:016X}={val:016X}")
+            self._trace_events['mem_write'] = (paddr, val & 0xFFFFFFFFFFFFFFFF)
+            if self.trace and not self.trace_file:
+                print(f"TRACE MEM {paddr:016X}={val:016X}")
         return True
+
+    def _emit_trace(self, pc, inst, priv):
+        """Write one architectural trace record for the current cycle.
+        
+        Trace format (one line per field, grouped by cycle):
+          CYCLE <n>
+          PC <hex>
+          INST <hex>
+          PRIV <M|U>
+          REG <rd> <hex>        (if register writeback occurred)
+          MEM_RD <addr> <hex>   (if memory read occurred)
+          MEM_WR <addr> <hex>   (if memory write occurred)
+          CSR_WR <addr> <hex>   (if CSR write occurred)
+          TRAP <cause>          (if synchronous trap occurred)
+          INTERRUPT <cause>     (if asynchronous interrupt occurred)
+          ---                   (cycle separator)
+        """
+        if not self.trace_file:
+            return
+        f = self.trace_file
+        f.write(f"CYCLE {self.cycle}\n")
+        f.write(f"PC {pc:016X}\n")
+        f.write(f"INST {inst:08X}\n")
+        f.write(f"PRIV {'M' if priv else 'U'}\n")
+        ev = self._trace_events
+        if 'reg_write' in ev:
+            rd, val = ev['reg_write']
+            f.write(f"REG {rd} {val:016X}\n")
+        if 'mem_read' in ev:
+            addr, val = ev['mem_read']
+            f.write(f"MEM_RD {addr:016X} {val:016X}\n")
+        if 'mem_write' in ev:
+            addr, val = ev['mem_write']
+            f.write(f"MEM_WR {addr:016X} {val:016X}\n")
+        if 'csr_write' in ev:
+            csr_addr, val = ev['csr_write']
+            f.write(f"CSR_WR {csr_addr:04X} {val:016X}\n")
+        if 'trap' in ev:
+            f.write(f"TRAP {ev['trap']}\n")
+        if 'interrupt' in ev:
+            f.write(f"INTERRUPT {ev['interrupt']}\n")
+        f.write("---\n")
 
     def step(self):
         """Execute one CPU clock cycle. Returns True if CPU is still active."""
         self.cycle += 1
+        self._trace_events = {}  # Reset per-cycle trace events
+        cycle_pc = self.pc      # Capture PC at start of cycle
+        cycle_priv = self.priv_mode
 
         # Step 1: mtime increments every cycle (matches RTL timer.v posedge clk)
         self.mtime += 1
@@ -162,12 +224,16 @@ class NanoCore64Emulator:
         if (self.csrs[0] & 2) and (self.mtime >= self.csrs[6]):
             self._take_trap(3)  # Timer Interrupt
             self.halted = False
+            self._emit_trace(cycle_pc, 0, cycle_priv)
             return True
 
         # Step 3: If halted (SLEEP), no instruction executes
-        if self.halted: return False
+        if self.halted:
+            self._emit_trace(cycle_pc, 0, cycle_priv)
+            return False
 
-        if self.trace: print(f"TRACE PC={self.pc:016X}")
+        if self.trace and not self.trace_file:
+            print(f"TRACE PC={self.pc:016X}")
 
         # Step 4: Instruction fetch with MMU translation
         inst_paddr, inst_fault = self._translate_addr(self.pc)
@@ -177,6 +243,7 @@ class NanoCore64Emulator:
 
         word_pc = inst_paddr >> 2
         inst = self.inst_mem[word_pc] if word_pc < len(self.inst_mem) else 0
+        cycle_inst = inst
         
         # Decode
         opcode = inst & 0x3F
@@ -217,11 +284,13 @@ class NanoCore64Emulator:
             val = self.read_mem(self.regs[rs1] + imm16_ext)
             if val is None:
                 self._take_trap(2)  # Page Fault
+                self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
                 return True
             self.write_reg(rd, val)
         elif opcode == 0x09: # ST
             if not self.write_mem(self.regs[rs1] + imm16_ext, self.regs[rd]):
                 self._take_trap(2)  # Page Fault
+                self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
                 return True
         elif opcode == 0x0A: # BEQ
             if self.regs[rd] == self.regs[rs1]: next_pc = self.pc + 4 + (imm16_ext * 4)
@@ -236,19 +305,23 @@ class NanoCore64Emulator:
         elif opcode == 0x0E: # CSRR (M-Mode only per ISA)
             if self.priv_mode == 0:
                 self._take_trap(4)  # Privilege Violation
+                self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
                 return True
             else:
                 self.write_reg(rd, self.csrs.get(imm16, 0))
         elif opcode == 0x0F: # CSRW
             if self.priv_mode == 0:
                 self._take_trap(4)  # Privilege Violation
+                self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
                 return True
             else:
                 self.csrs[imm16] = self.regs[rs1]
+                self._trace_events['csr_write'] = (imm16, self.regs[rs1])
                 if imm16 == 0:
                     self.priv_mode = self.regs[rs1] & 1
         elif opcode == 0x10: # SYSCALL
             self._take_trap(1)  # Syscall
+            self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
             return True
         elif opcode == 0x11: # RET
             # Restore privilege from STATUS[0], jump to EPC
@@ -264,6 +337,7 @@ class NanoCore64Emulator:
 
         # Step 6: Update PC
         self.pc = next_pc & 0xFFFFFFFFFFFFFFFF
+        self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
         return not self.halted
 
     def dump(self):
@@ -275,10 +349,17 @@ if __name__ == "__main__":
     import sys
     trace = "--trace" in sys.argv
     if trace: sys.argv.remove("--trace")
+    trace_file_path = None
+    if "--trace-file" in sys.argv:
+        idx = sys.argv.index("--trace-file")
+        trace_file_path = sys.argv[idx + 1]
+        sys.argv.pop(idx)
+        sys.argv.pop(idx)
     if len(sys.argv) != 2:
-        print("Usage: python3 emulator.py [--trace] <program.hex>")
+        print("Usage: python3 emulator.py [--trace] [--trace-file <path>] <program.hex>")
         sys.exit(1)
-    emu = NanoCore64Emulator(trace=trace)
+    tf = open(trace_file_path, 'w') if trace_file_path else None
+    emu = NanoCore64Emulator(trace=trace, trace_file=tf)
     emu.load_hex(sys.argv[1])
     print("--- Starting Execution ---")
     max_cycles = 50000
@@ -298,3 +379,5 @@ if __name__ == "__main__":
         print(f"\n--- Timeout after {max_cycles} cycles ---")
     print(f"--- Finished after {emu.cycle} cycles ---")
     emu.dump()
+    if tf:
+        tf.close()
