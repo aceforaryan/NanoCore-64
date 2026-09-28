@@ -55,6 +55,14 @@ diff: $(SIM_BIN)
 	echo "Differential: $$pass/$$total MATCH, $$fail failures"; \
 	test $$fail -eq 0
 
+# Seeded randomized differential testing
+fuzz: $(SIM_BIN)
+	$(PYTHON) tools/random_test.py --seeds 20
+
+# Test the differential comparator itself (fault injection)
+test-comparator:
+	$(PYTHON) tools/test_comparator.py
+
 # Yosys synthesis
 synth:
 	$(YOSYS) -p "read_verilog $(RTL_SRC); synth -top cpu; stat" \
