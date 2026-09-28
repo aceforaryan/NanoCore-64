@@ -15,4 +15,9 @@ obj_dir/
 
 # Build artifacts
 abc.history
+
+# Regression output
 reports/
+
+# Yosys generated logs
+synthesis/*.log
