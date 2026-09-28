@@ -28,21 +28,23 @@ rtl/          Verilog RTL source
   mmu.v         Memory Management Unit
   timer.v       Hardware timer
 sim/          Simulation testbench
-  cpu_tb.v      RTL testbench with MMIO
-tests/        Assembly test suite
-  alu/          Arithmetic and logic tests
-  branch/       Branch instruction tests
-  csr/          CSR read/write and SYSCALL tests
-  exception/    Privilege and trap tests
-  memory/       Load/store tests
-  mmu/          MMU translation and fault tests
-  timer/        Timer interrupt tests
-  common/       Shared test infrastructure
+  cpu_tb.v      RTL testbench with MMIO and architectural trace
+tests/        Assembly test suite (25 directed tests)
+  alu/          Arithmetic, logic, shift, and R0 protection tests
+  branch/       Branch, JALR, and boundary tests
+  csr/          CSR read/write, SYSCALL, and TIME tests
+  exception/    Privilege, trap, RET, and back-to-back trap tests
+  memory/       Load/store and MMIO tests
+  mmu/          MMU translation, fault, and boundary tests
+  timer/        Timer interrupt, compare, and masking tests
+  common/       Shared test infrastructure (passfail.inc)
 tools/        Software toolchain
-  assembler.py  NanoCore-64 assembler
-  emulator.py   Instruction Set Simulator
-  diff_test.py  RTL ↔ Emulator differential test
-  regression.py Automated regression runner
+  assembler.py        NanoCore-64 assembler
+  emulator.py         Instruction Set Simulator (ISS)
+  diff_test.py        RTL ↔ ISS differential comparator
+  test_comparator.py  Comparator fault-injection validation
+  random_test.py      Seeded randomized differential testing
+  regression.py       Automated regression runner
 demos/        Example programs
   fibonacci.asm   Fibonacci sequence generator
   os_kernel.asm   Preemptive OS kernel demo
@@ -51,7 +53,8 @@ docs/         Documentation
   architecture.md Architecture design document
   synthesis_report.md  Yosys synthesis results
   verification.md      Verification methodology
-synthesis/    Synthesis reports and logs
+synthesis/    Synthesis reports
+Makefile      Canonical build entry point
 ```
 
 ## Prerequisites
@@ -63,7 +66,20 @@ synthesis/    Synthesis reports and logs
 
 ## Quick Start
 
-### Assemble and Emulate
+### Build
+```bash
+make                    # Compile RTL simulation binary
+```
+
+### Run Tests
+```bash
+make test               # Directed regression (25 tests)
+make diff               # Differential ISS/RTL comparison (25 tests)
+make fuzz               # Seeded randomized differential testing (20 seeds)
+make test-comparator    # Comparator fault-injection validation (20 tests)
+```
+
+### Single Test
 ```bash
 python3 tools/assembler.py demos/fibonacci.asm fibonacci.hex
 python3 tools/emulator.py fibonacci.hex
@@ -71,19 +87,24 @@ python3 tools/emulator.py fibonacci.hex
 
 ### RTL Simulation
 ```bash
-iverilog -o cpu_sim rtl/cpu.v rtl/alu.v rtl/regfile.v rtl/csr.v rtl/mmu.v rtl/timer.v sim/cpu_tb.v
+make compile
 vvp cpu_sim +HEX_FILE=fibonacci.hex
 ```
 
-### Run Test Suite
+### Synthesis
 ```bash
-python3 tools/regression.py
+make synth
 ```
 
-### Differential Test
-```bash
-python3 tools/diff_test.py tests/alu/arithmetic.asm
-```
+## Verification Summary
+
+| Metric | Result |
+|--------|--------|
+| Directed regression | 25/25 PASS |
+| Differential ISS/RTL match | 25/25 MATCH (0 mismatches) |
+| Comparator fault-injection | 20/20 faults detected |
+| Randomized differential | 20/20 seeds MATCH |
+| Synthesis (Yosys generic) | 18,347 cells |
 
 ## Architectural Tradeoffs
 
