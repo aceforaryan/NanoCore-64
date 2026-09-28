@@ -217,13 +217,43 @@ def main():
         print(f"    ISS: {iss_result} | RTL: {rtl_result}")
         sys.exit(0)
     else:
-        print(f"\n[-] MISMATCH: {len(mismatches)} difference(s) in {matched} compared cycles")
-        print(f"    {'Cycle':>6}  {'Field':<10}  {'ISS':<24}  {'RTL':<24}")
-        print(f"    {'-'*6}  {'-'*10}  {'-'*24}  {'-'*24}")
-        for cycle, field, iss_val, rtl_val in mismatches[:20]:
-            print(f"    {cycle:>6}  {field:<10}  {iss_val:<24}  {rtl_val:<24}")
-        if len(mismatches) > 20:
-            print(f"    ... and {len(mismatches) - 20} more")
+        print(f"\n[-] DIFF FAILURE")
+        print(f"Test: {asm_file}")
+        
+        first_mismatch = mismatches[0]
+        cycle = first_mismatch[0]
+        field = first_mismatch[1]
+        iss_val = first_mismatch[2]
+        rtl_val = first_mismatch[3]
+        
+        # Find index for cycle
+        idx = -1
+        for i, ic in enumerate(iss_cycles):
+            if ic.get('CYCLE', i+1) == cycle:
+                idx = i
+                break
+                
+        prev_match_cycle = "None"
+        if idx > 0:
+            prev_match_cycle = iss_cycles[idx-1].get('CYCLE', idx)
+            
+        print(f"Cycle: {cycle}")
+        print(f"Field: {field}")
+        print(f"RTL : {rtl_val}")
+        print(f"ISS : {iss_val}")
+        
+        print("\nContext:")
+        if idx != -1 and idx < len(iss_cycles) and idx < len(rtl_cycles):
+            print(f"Instruction (ISS): {iss_cycles[idx].get('INST', 'MISSING')}")
+            print(f"Instruction (RTL): {rtl_cycles[idx].get('INST', 'MISSING')}")
+            print(f"Privilege (ISS): {iss_cycles[idx].get('PRIV', 'MISSING')}")
+            print(f"Privilege (RTL): {rtl_cycles[idx].get('PRIV', 'MISSING')}")
+            if 'PC' in iss_cycles[idx] or 'PC' in rtl_cycles[idx]:
+                print(f"PC (ISS): {iss_cycles[idx].get('PC', 'MISSING')}")
+                print(f"PC (RTL): {rtl_cycles[idx].get('PC', 'MISSING')}")
+        
+        print(f"\nLast matching cycle: {prev_match_cycle}")
+        print(f"Total differences found: {len(mismatches)}")
         sys.exit(1)
 
     # Cleanup

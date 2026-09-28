@@ -72,14 +72,23 @@ Results are written to `reports/latest/` with per-test logs and a summary.
 python3 tools/diff_test.py tests/alu/arithmetic.asm
 ```
 
-Compares execution traces between the emulator and RTL simulation.
+The differential tester establishes cycle-by-cycle architectural trace agreement across the directed regression suite.
+
+#### Trace Semantics
+- **Cycle Definition**: A trace record for cycle N represents the architectural state transition that occurred during that cycle.
+- **Trace Content**: Includes the PC, the instruction executing (even if halted), privilege mode, register writes, memory accesses, CSR writes, synchronous traps, and asynchronous interrupts accepted.
+- **RTL Timing**: Traces combinational signals evaluated during cycle N at `negedge clk`, representing the instruction that just executed.
+- **Termination**: Tests terminate via a TEST_STATUS memory store at `posedge clk`. Since RTL `$finish` executes before the `negedge clk` trace emission for that final cycle, the ISS trace is expected to be exactly 1 cycle longer than the RTL trace.
+- **SLEEP Behavior**: During SLEEP cycles, the CPU is functionally evaluating the SLEEP instruction repeatedly. Both RTL and ISS explicitly emit the SLEEP instruction word (located at the halted PC) to accurately reflect this single-cycle un-clock-gated implementation.
+- **MMU Faults**: `imem` is explicitly zero-initialized in the testbench. On instruction page faults to uninitialized regions, both RTL and ISS evaluate and trace a `00000000` instruction word.
+- **Timer Semantics**: Both RTL and ISS evaluate timer interrupts combinationally based on the `mtime` value from the *previous* clock edge.
 
 ## Emulator
 
 The Python ISS (`tools/emulator.py`) implements the same ISA as the RTL. It can be used for:
 - Quick program testing without RTL simulation
-- Trace generation (`--trace` flag)
-- Differential testing against RTL
+- Cycle-level trace generation (`--trace-file` flag)
+- Architectural equivalence differential testing against RTL
 
 ### Known Emulator/RTL Differences
 
@@ -88,7 +97,6 @@ The Python ISS (`tools/emulator.py`) implements the same ISA as the RTL. It can 
 | Undefined opcodes | NOP (silent) | Halts with error message |
 | Instruction memory | 2048 × 32-bit (testbench) | 4096 × 32-bit |
 | Data memory | 2048 × 64-bit (testbench) | 4096 × 64-bit |
-| MMIO 0x20000000 | Terminates simulation | Not implemented |
 
 ## Verification Gaps
 

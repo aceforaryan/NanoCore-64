@@ -78,6 +78,10 @@ module cpu_tb;
         end
     endtask
 
+    integer trace_fd;
+    reg trace_enabled;
+    reg [2047:0] trace_path;
+
     // Data memory write handling (MMIO and normal)
     always @(posedge clk) begin
         if (dmem_we) begin
@@ -86,10 +90,12 @@ module cpu_tb;
             end else if (dmem_addr == 64'h20000000) begin
                 if (dmem_wdata == 64'h00) begin
                     $display("\nTEST_RESULT: PASS");
+                    if (trace_enabled) $fclose(trace_fd);
                     $finish;
                 end else begin
                     $display("\nTEST_RESULT: FAIL");
                     print_diagnostics(dmem_wdata);
+                    if (trace_enabled) $fclose(trace_fd);
                     $finish;
                 end
             end else begin
@@ -118,9 +124,7 @@ module cpu_tb;
     //   ---
     // =========================================================================
 
-    integer trace_fd;
-    reg trace_enabled;
-    reg [2047:0] trace_path;
+    // =========================================================================
 
     // Registered snapshot of combinational trace signals
     // Captured at posedge clk (same edge that latches new PC),
@@ -216,7 +220,10 @@ module cpu_tb;
         cycle_count = 0;
         trace_enabled = 0;
         trace_fd = 0;
-        for (j = 0; j < 2048; j = j + 1) dmem[j] = 64'd0;
+        for (j = 0; j < 2048; j = j + 1) begin
+            imem[j] = 32'd0;
+            dmem[j] = 64'd0;
+        end
         
         if ($value$plusargs("HEX_FILE=%s", hex_file)) begin
             $readmemh(hex_file, imem);

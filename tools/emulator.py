@@ -231,7 +231,10 @@ class NanoCore64Emulator:
         if (self.csrs[0] & 2) and (self.mtime >= self.csrs[6]):
             self._take_trap(3)  # Timer Interrupt
             self.halted = False
-            self._emit_trace(cycle_pc, 0, cycle_priv)
+            inst_paddr, _ = self._translate_addr(cycle_pc)
+            word_pc = inst_paddr >> 2
+            inst = self.inst_mem[word_pc] if word_pc < len(self.inst_mem) else 0
+            self._emit_trace(cycle_pc, inst, cycle_priv)
             # Increment mtime at end of cycle (RTL NBA)
             self.mtime += 1
             self.csrs[5] = self.mtime
@@ -239,7 +242,10 @@ class NanoCore64Emulator:
 
         # Step 2: If halted (SLEEP), no instruction executes
         if self.halted:
-            self._emit_trace(cycle_pc, 0, cycle_priv)
+            inst_paddr, _ = self._translate_addr(cycle_pc)
+            word_pc = inst_paddr >> 2
+            inst = self.inst_mem[word_pc] if word_pc < len(self.inst_mem) else 0
+            self._emit_trace(cycle_pc, inst, cycle_priv)
             # Increment mtime at end of cycle (RTL NBA)
             self.mtime += 1
             self.csrs[5] = self.mtime
