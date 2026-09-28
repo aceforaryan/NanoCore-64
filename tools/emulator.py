@@ -209,36 +209,52 @@ class NanoCore64Emulator:
         f.write("---\n")
 
     def step(self):
-        """Execute one CPU clock cycle. Returns True if CPU is still active."""
+        """Execute one CPU clock cycle. Returns True if CPU is still active.
+        
+        Timer model:
+          RTL uses nonblocking assign: mtime <= mtime + 1 at posedge clk.
+          The instruction and interrupt check (combinational) see the OLD mtime
+          because NBAs update after the Active region. The increment becomes
+          visible on the next cycle.
+          
+          ISS models this as: check interrupt with current mtime, execute
+          instruction with current mtime, then increment mtime at end of step.
+        """
         self.cycle += 1
         self._trace_events = {}  # Reset per-cycle trace events
         cycle_pc = self.pc      # Capture PC at start of cycle
         cycle_priv = self.priv_mode
 
-        # Step 1: mtime increments every cycle (matches RTL timer.v posedge clk)
-        self.mtime += 1
-        self.csrs[5] = self.mtime
-
-        # Step 2: Check timer interrupt (combinational in RTL)
-        # interrupt_req = STATUS[1] (GIE) & (mtime >= TIMECMP)
+        # Step 1: Check timer interrupt using CURRENT mtime (pre-increment)
+        # Matches RTL: combinational interrupt_req = STATUS[1] & (mtime >= TIMECMP)
+        # where mtime is the registered value from the PREVIOUS cycle.
         if (self.csrs[0] & 2) and (self.mtime >= self.csrs[6]):
             self._take_trap(3)  # Timer Interrupt
             self.halted = False
             self._emit_trace(cycle_pc, 0, cycle_priv)
+            # Increment mtime at end of cycle (RTL NBA)
+            self.mtime += 1
+            self.csrs[5] = self.mtime
             return True
 
-        # Step 3: If halted (SLEEP), no instruction executes
+        # Step 2: If halted (SLEEP), no instruction executes
         if self.halted:
             self._emit_trace(cycle_pc, 0, cycle_priv)
+            # Increment mtime at end of cycle (RTL NBA)
+            self.mtime += 1
+            self.csrs[5] = self.mtime
             return False
 
         if self.trace and not self.trace_file:
             print(f"TRACE PC={self.pc:016X}")
 
-        # Step 4: Instruction fetch with MMU translation
+        # Step 3: Instruction fetch with MMU translation
         inst_paddr, inst_fault = self._translate_addr(self.pc)
         if inst_fault:
             self._take_trap(2)  # Page Fault
+            self._emit_trace(cycle_pc, 0, cycle_priv)
+            self.mtime += 1
+            self.csrs[5] = self.mtime
             return True
 
         word_pc = inst_paddr >> 2
@@ -285,12 +301,16 @@ class NanoCore64Emulator:
             if val is None:
                 self._take_trap(2)  # Page Fault
                 self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
+                self.mtime += 1
+                self.csrs[5] = self.mtime
                 return True
             self.write_reg(rd, val)
         elif opcode == 0x09: # ST
             if not self.write_mem(self.regs[rs1] + imm16_ext, self.regs[rd]):
                 self._take_trap(2)  # Page Fault
                 self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
+                self.mtime += 1
+                self.csrs[5] = self.mtime
                 return True
         elif opcode == 0x0A: # BEQ
             if self.regs[rd] == self.regs[rs1]: next_pc = self.pc + 4 + (imm16_ext * 4)
@@ -306,6 +326,8 @@ class NanoCore64Emulator:
             if self.priv_mode == 0:
                 self._take_trap(4)  # Privilege Violation
                 self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
+                self.mtime += 1
+                self.csrs[5] = self.mtime
                 return True
             else:
                 self.write_reg(rd, self.csrs.get(imm16, 0))
@@ -313,6 +335,8 @@ class NanoCore64Emulator:
             if self.priv_mode == 0:
                 self._take_trap(4)  # Privilege Violation
                 self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
+                self.mtime += 1
+                self.csrs[5] = self.mtime
                 return True
             else:
                 self.csrs[imm16] = self.regs[rs1]
@@ -322,6 +346,8 @@ class NanoCore64Emulator:
         elif opcode == 0x10: # SYSCALL
             self._take_trap(1)  # Syscall
             self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
+            self.mtime += 1
+            self.csrs[5] = self.mtime
             return True
         elif opcode == 0x11: # RET
             # Restore privilege from STATUS[0], jump to EPC
@@ -338,6 +364,9 @@ class NanoCore64Emulator:
         # Step 6: Update PC
         self.pc = next_pc & 0xFFFFFFFFFFFFFFFF
         self._emit_trace(cycle_pc, cycle_inst, cycle_priv)
+        # Increment mtime at end of cycle (RTL NBA)
+        self.mtime += 1
+        self.csrs[5] = self.mtime
         return not self.halted
 
     def dump(self):
